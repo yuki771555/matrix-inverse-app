@@ -323,6 +323,11 @@
               <option value="5">5 x 5</option>
               <option value="6">6 x 6</option>
             </select>
+            <label for="displayMode">表示</label>
+            <select id="displayMode" aria-label="結果の表示形式">
+              <option value="fraction" selected>分数</option>
+              <option value="decimal">小数</option>
+            </select>
             <button id="calculateBtn" type="button">計算</button>
             <button id="identityBtn" type="button" class="secondary">単位行列</button>
             <button id="exampleBtn" type="button" class="secondary">例を入力</button>
@@ -366,8 +371,10 @@
       const stepsList = document.querySelector("#steps");
       const csvInput = document.querySelector("#csvInput");
       const copyBtn = document.querySelector("#copyBtn");
+      const displayMode = document.querySelector("#displayMode");
 
       let latestInverse = null;
+      let latestResult = null;
 
       const examples = {
         2: [
@@ -429,10 +436,67 @@
         });
       }
 
+      function approximateFraction(value, maxDenominator = 100000) {
+        if (!Number.isFinite(value)) return null;
+        if (Math.abs(value) < 1e-10) return { numerator: 0, denominator: 1 };
+
+        const sign = value < 0 ? -1 : 1;
+        const target = Math.abs(value);
+        const rounded = Math.round(target);
+        if (Math.abs(target - rounded) < 1e-10) {
+          return { numerator: sign * rounded, denominator: 1 };
+        }
+
+        let lowerN = 0;
+        let lowerD = 1;
+        let upperN = 1;
+        let upperD = 0;
+
+        while (true) {
+          const middleN = lowerN + upperN;
+          const middleD = lowerD + upperD;
+          if (middleD > maxDenominator) break;
+
+          const middle = middleN / middleD;
+          if (Math.abs(target - middle) < 1e-10) {
+            return { numerator: sign * middleN, denominator: middleD };
+          }
+          if (middle < target) {
+            lowerN = middleN;
+            lowerD = middleD;
+          } else {
+            upperN = middleN;
+            upperD = middleD;
+          }
+        }
+
+        const lower = lowerN / lowerD;
+        const upper = upperD === 0 ? Number.POSITIVE_INFINITY : upperN / upperD;
+        const best =
+          Math.abs(target - lower) <= Math.abs(target - upper)
+            ? { numerator: lowerN, denominator: lowerD }
+            : { numerator: upperN, denominator: upperD };
+
+        if (Math.abs(target - best.numerator / best.denominator) > 1e-8) return null;
+        return { numerator: sign * best.numerator, denominator: best.denominator };
+      }
+
+      function formatFraction(value) {
+        const fraction = approximateFraction(value);
+        if (!fraction) return formatNumber(value);
+        if (fraction.denominator === 1) return String(fraction.numerator);
+        return `${fraction.numerator}/${fraction.denominator}`;
+      }
+
+      function formatValue(value) {
+        return displayMode.value === "fraction" ? formatFraction(value) : formatNumber(value);
+      }
+
       function buildGrid(size) {
         grid.innerHTML = "";
         grid.style.gridTemplateColumns = `repeat(${size}, minmax(76px, 1fr))`;
         latestInverse = null;
+        latestResult = null;
         for (let row = 0; row < size; row += 1) {
           for (let col = 0; col < size; col += 1) {
             const input = document.createElement("input");
@@ -505,7 +569,7 @@
           for (let j = 0; j < 2 * n; j += 1) {
             augmented[col][j] /= pivotValue;
           }
-          steps.push(`R${col + 1} を ${formatNumber(pivotValue)} で割ってピボットを 1 にする`);
+          steps.push(`R${col + 1} を ${formatValue(pivotValue)} で割ってピボットを 1 にする`);
 
           for (let row = 0; row < n; row += 1) {
             if (row === col) continue;
@@ -514,7 +578,7 @@
             for (let j = 0; j < 2 * n; j += 1) {
               augmented[row][j] -= factor * augmented[col][j];
             }
-            steps.push(`R${row + 1} から ${formatNumber(factor)} x R${col + 1} を引く`);
+            steps.push(`R${row + 1} から ${formatValue(factor)} x R${col + 1} を引く`);
           }
         }
 
@@ -531,6 +595,7 @@
         result.innerHTML = "";
         stepsList.innerHTML = "";
         stepsBox.hidden = !data.steps.length;
+        latestResult = data;
 
         data.steps.forEach((step) => {
           const item = document.createElement("li");
@@ -539,7 +604,7 @@
         });
 
         meta.hidden = false;
-        meta.innerHTML = `<div>行列式 det(A): ${formatNumber(data.determinant)}</div>`;
+        meta.innerHTML = `<div>行列式 det(A): ${formatValue(data.determinant)}</div>`;
 
         if (!data.ok) {
           latestInverse = null;
@@ -563,7 +628,7 @@
           tr.appendChild(th);
           row.forEach((value) => {
             const td = document.createElement("td");
-            td.textContent = formatNumber(value);
+            td.textContent = formatValue(value);
             tr.appendChild(td);
           });
           table.appendChild(tr);
@@ -577,6 +642,7 @@
           renderResult(inverse(matrix));
         } catch (error) {
           latestInverse = null;
+          latestResult = null;
           meta.hidden = true;
           result.innerHTML = "";
           stepsBox.hidden = true;
@@ -615,6 +681,7 @@
         meta.hidden = true;
         result.innerHTML = "";
         stepsBox.hidden = true;
+        latestResult = null;
         message.textContent = "左の行列に値を入れて「計算」を押してください。";
         message.className = "message";
         statusPill.textContent = "準備完了";
@@ -638,9 +705,12 @@
           message.className = "message error";
           return;
         }
-        const text = latestInverse.map((row) => row.map(formatNumber).join(",")).join("\n");
+        const text = latestInverse.map((row) => row.map(formatValue).join(",")).join("\n");
         await navigator.clipboard.writeText(text);
         statusPill.textContent = "コピー完了";
+      });
+      displayMode.addEventListener("change", () => {
+        if (latestResult) calculate();
       });
 
       buildGrid(Number(sizeSelect.value));
