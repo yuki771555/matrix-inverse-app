@@ -1,0 +1,651 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>逆行列計算機</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f6f4ef;
+        --panel: #ffffff;
+        --ink: #202124;
+        --muted: #667085;
+        --line: #d9d3c7;
+        --accent: #0f766e;
+        --accent-strong: #0b5f59;
+        --danger: #b42318;
+        --soft: #e7f5f2;
+        --shadow: 0 18px 40px rgba(43, 35, 20, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background:
+          linear-gradient(135deg, rgba(15, 118, 110, 0.12), transparent 36%),
+          linear-gradient(315deg, rgba(192, 86, 33, 0.1), transparent 34%),
+          var(--bg);
+        color: var(--ink);
+        font-family:
+          "Segoe UI",
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Noto Sans JP",
+          sans-serif;
+      }
+
+      main {
+        width: min(1160px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 32px 0 48px;
+      }
+
+      .app-header {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 18px;
+        align-items: end;
+        margin-bottom: 24px;
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: clamp(2rem, 5vw, 4.2rem);
+        line-height: 1;
+        letter-spacing: 0;
+      }
+
+      .lead {
+        margin: 0;
+        max-width: 690px;
+        color: var(--muted);
+        font-size: 1rem;
+        line-height: 1.7;
+      }
+
+      .status-pill {
+        display: inline-flex;
+        align-items: center;
+        min-height: 40px;
+        padding: 0 14px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.72);
+        color: var(--accent-strong);
+        font-weight: 700;
+        white-space: nowrap;
+      }
+
+      .workspace {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(320px, 440px);
+        gap: 18px;
+        align-items: start;
+      }
+
+      .tool,
+      .output {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.88);
+        box-shadow: var(--shadow);
+      }
+
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+        padding: 16px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      label {
+        color: var(--muted);
+        font-size: 0.92rem;
+        font-weight: 700;
+      }
+
+      select,
+      input,
+      button,
+      textarea {
+        font: inherit;
+      }
+
+      select,
+      input {
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: #fff;
+        color: var(--ink);
+      }
+
+      select {
+        min-width: 86px;
+        min-height: 40px;
+        padding: 0 10px;
+      }
+
+      button {
+        min-height: 40px;
+        border: 0;
+        border-radius: 7px;
+        padding: 0 14px;
+        background: var(--accent);
+        color: #fff;
+        font-weight: 800;
+        cursor: pointer;
+        transition:
+          transform 0.16s ease,
+          background 0.16s ease;
+      }
+
+      button:hover {
+        background: var(--accent-strong);
+        transform: translateY(-1px);
+      }
+
+      button.secondary {
+        border: 1px solid var(--line);
+        background: #fff;
+        color: var(--ink);
+      }
+
+      button.secondary:hover {
+        background: #f9fafb;
+      }
+
+      .matrix-wrap {
+        padding: 18px;
+        overflow-x: auto;
+      }
+
+      .matrix-grid {
+        display: grid;
+        gap: 8px;
+        width: max-content;
+        min-width: 100%;
+      }
+
+      .cell {
+        width: 88px;
+        height: 46px;
+        padding: 0 10px;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        padding: 0 18px 18px;
+      }
+
+      .output {
+        padding: 18px;
+      }
+
+      .output h2 {
+        margin: 0 0 12px;
+        font-size: 1.2rem;
+      }
+
+      .message {
+        margin: 0 0 16px;
+        color: var(--muted);
+        line-height: 1.65;
+      }
+
+      .message.error {
+        color: var(--danger);
+        font-weight: 700;
+      }
+
+      .result-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 12px;
+        overflow: hidden;
+        border-radius: 8px;
+      }
+
+      .result-table td,
+      .result-table th {
+        border: 1px solid var(--line);
+        padding: 10px;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+        background: #fff;
+      }
+
+      .result-table th {
+        width: 1%;
+        color: var(--muted);
+        background: #fbfaf8;
+        text-align: center;
+      }
+
+      .meta {
+        display: grid;
+        gap: 8px;
+        padding: 12px;
+        border-radius: 8px;
+        background: var(--soft);
+        color: var(--accent-strong);
+        font-weight: 800;
+      }
+
+      .steps {
+        margin-top: 16px;
+      }
+
+      .steps summary {
+        cursor: pointer;
+        color: var(--accent-strong);
+        font-weight: 800;
+      }
+
+      .steps ol {
+        margin: 10px 0 0;
+        padding-left: 24px;
+        color: var(--muted);
+        line-height: 1.6;
+      }
+
+      textarea {
+        width: 100%;
+        min-height: 108px;
+        margin-top: 16px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 12px;
+        resize: vertical;
+        color: var(--ink);
+        background: #fff;
+      }
+
+      .hint {
+        margin: 10px 0 0;
+        color: var(--muted);
+        font-size: 0.9rem;
+        line-height: 1.55;
+      }
+
+      @media (max-width: 860px) {
+        main {
+          width: min(100% - 20px, 680px);
+          padding-top: 20px;
+        }
+
+        .app-header,
+        .workspace {
+          grid-template-columns: 1fr;
+        }
+
+        .status-pill {
+          justify-self: start;
+        }
+
+        .cell {
+          width: 76px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header class="app-header">
+        <div>
+          <h1>逆行列計算機</h1>
+          <p class="lead">
+            2x2 から 6x6 までの正方行列に対応。小数や分数を入力して、逆行列・行列式・計算ステップを確認できます。
+          </p>
+        </div>
+        <div class="status-pill" id="statusPill">準備完了</div>
+      </header>
+
+      <section class="workspace" aria-label="逆行列計算アプリ">
+        <div class="tool">
+          <div class="toolbar">
+            <label for="sizeSelect">サイズ</label>
+            <select id="sizeSelect" aria-label="行列サイズ">
+              <option value="2">2 x 2</option>
+              <option value="3" selected>3 x 3</option>
+              <option value="4">4 x 4</option>
+              <option value="5">5 x 5</option>
+              <option value="6">6 x 6</option>
+            </select>
+            <button id="calculateBtn" type="button">計算</button>
+            <button id="identityBtn" type="button" class="secondary">単位行列</button>
+            <button id="exampleBtn" type="button" class="secondary">例を入力</button>
+            <button id="clearBtn" type="button" class="secondary">クリア</button>
+          </div>
+          <div class="matrix-wrap">
+            <div id="matrixGrid" class="matrix-grid" aria-label="行列入力"></div>
+            <p class="hint">入力例: <code>1.5</code>, <code>-2</code>, <code>3/4</code>。空欄は 0 として扱います。</p>
+          </div>
+          <div class="actions">
+            <button id="pasteBtn" type="button" class="secondary">CSVを貼り付け</button>
+            <button id="copyBtn" type="button" class="secondary">結果をコピー</button>
+          </div>
+        </div>
+
+        <aside class="output" aria-live="polite">
+          <h2>計算結果</h2>
+          <p id="message" class="message">左の行列に値を入れて「計算」を押してください。</p>
+          <div id="meta" class="meta" hidden></div>
+          <div id="result"></div>
+          <details class="steps" id="stepsBox" hidden>
+            <summary>計算ステップ</summary>
+            <ol id="steps"></ol>
+          </details>
+          <textarea id="csvInput" placeholder="CSV形式で行列を貼り付けできます。例:
+1,2,3
+0,1,4
+5,6,0" hidden></textarea>
+        </aside>
+      </section>
+    </main>
+
+    <script>
+      const sizeSelect = document.querySelector("#sizeSelect");
+      const grid = document.querySelector("#matrixGrid");
+      const message = document.querySelector("#message");
+      const statusPill = document.querySelector("#statusPill");
+      const result = document.querySelector("#result");
+      const meta = document.querySelector("#meta");
+      const stepsBox = document.querySelector("#stepsBox");
+      const stepsList = document.querySelector("#steps");
+      const csvInput = document.querySelector("#csvInput");
+      const copyBtn = document.querySelector("#copyBtn");
+
+      let latestInverse = null;
+
+      const examples = {
+        2: [
+          [4, 7],
+          [2, 6],
+        ],
+        3: [
+          [1, 2, 3],
+          [0, 1, 4],
+          [5, 6, 0],
+        ],
+        4: [
+          [2, 1, 0, 3],
+          [1, 0, 2, -1],
+          [3, 2, 1, 0],
+          [0, 1, -2, 1],
+        ],
+        5: [
+          [1, 0, 2, -1, 3],
+          [3, 1, 0, 2, -2],
+          [2, -1, 1, 0, 1],
+          [0, 2, -3, 1, 4],
+          [1, 1, 1, 1, 0],
+        ],
+        6: [
+          [2, 0, 1, 0, 3, -1],
+          [1, 1, 0, 2, 0, 4],
+          [0, 3, -1, 1, 2, 0],
+          [4, 0, 2, -2, 1, 1],
+          [1, -1, 3, 0, 0, 2],
+          [0, 2, 1, 3, -1, 1],
+        ],
+      };
+
+      function parseNumber(value) {
+        const trimmed = value.trim();
+        if (!trimmed) return 0;
+        if (trimmed.includes("/")) {
+          const parts = trimmed.split("/");
+          if (parts.length !== 2) throw new Error(`「${value}」は分数として読み取れません。`);
+          const numerator = Number(parts[0]);
+          const denominator = Number(parts[1]);
+          if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator === 0) {
+            throw new Error(`「${value}」は分数として読み取れません。`);
+          }
+          return numerator / denominator;
+        }
+        const parsed = Number(trimmed);
+        if (!Number.isFinite(parsed)) throw new Error(`「${value}」は数値として読み取れません。`);
+        return parsed;
+      }
+
+      function formatNumber(value) {
+        if (Math.abs(value) < 1e-10) return "0";
+        const rounded = Number(value.toFixed(10));
+        return rounded.toLocaleString("ja-JP", {
+          maximumFractionDigits: 10,
+          useGrouping: false,
+        });
+      }
+
+      function buildGrid(size) {
+        grid.innerHTML = "";
+        grid.style.gridTemplateColumns = `repeat(${size}, minmax(76px, 1fr))`;
+        latestInverse = null;
+        for (let row = 0; row < size; row += 1) {
+          for (let col = 0; col < size; col += 1) {
+            const input = document.createElement("input");
+            input.className = "cell";
+            input.inputMode = "decimal";
+            input.autocomplete = "off";
+            input.ariaLabel = `${row + 1}行${col + 1}列`;
+            input.dataset.row = row;
+            input.dataset.col = col;
+            grid.appendChild(input);
+          }
+        }
+      }
+
+      function readMatrix() {
+        const size = Number(sizeSelect.value);
+        const matrix = Array.from({ length: size }, () => Array(size).fill(0));
+        [...grid.querySelectorAll("input")].forEach((input) => {
+          matrix[Number(input.dataset.row)][Number(input.dataset.col)] = parseNumber(input.value);
+        });
+        return matrix;
+      }
+
+      function fillMatrix(matrix) {
+        const size = matrix.length;
+        sizeSelect.value = String(size);
+        buildGrid(size);
+        [...grid.querySelectorAll("input")].forEach((input) => {
+          const value = matrix[Number(input.dataset.row)][Number(input.dataset.col)];
+          input.value = value === 0 ? "" : String(value);
+        });
+      }
+
+      function inverse(matrix) {
+        const n = matrix.length;
+        const augmented = matrix.map((row, rowIndex) => [
+          ...row.map(Number),
+          ...Array.from({ length: n }, (_, colIndex) => (rowIndex === colIndex ? 1 : 0)),
+        ]);
+        const steps = [];
+        let determinant = 1;
+        let swaps = 0;
+
+        for (let col = 0; col < n; col += 1) {
+          let pivotRow = col;
+          for (let row = col + 1; row < n; row += 1) {
+            if (Math.abs(augmented[row][col]) > Math.abs(augmented[pivotRow][col])) {
+              pivotRow = row;
+            }
+          }
+
+          const pivot = augmented[pivotRow][col];
+          if (Math.abs(pivot) < 1e-12) {
+            return {
+              ok: false,
+              determinant: 0,
+              steps,
+              reason: `${col + 1}列目で有効なピボットが見つからないため、この行列は逆行列を持ちません。`,
+            };
+          }
+
+          if (pivotRow !== col) {
+            [augmented[col], augmented[pivotRow]] = [augmented[pivotRow], augmented[col]];
+            swaps += 1;
+            steps.push(`R${col + 1} と R${pivotRow + 1} を交換`);
+          }
+
+          const pivotValue = augmented[col][col];
+          determinant *= pivotValue;
+          for (let j = 0; j < 2 * n; j += 1) {
+            augmented[col][j] /= pivotValue;
+          }
+          steps.push(`R${col + 1} を ${formatNumber(pivotValue)} で割ってピボットを 1 にする`);
+
+          for (let row = 0; row < n; row += 1) {
+            if (row === col) continue;
+            const factor = augmented[row][col];
+            if (Math.abs(factor) < 1e-12) continue;
+            for (let j = 0; j < 2 * n; j += 1) {
+              augmented[row][j] -= factor * augmented[col][j];
+            }
+            steps.push(`R${row + 1} から ${formatNumber(factor)} x R${col + 1} を引く`);
+          }
+        }
+
+        if (swaps % 2 === 1) determinant *= -1;
+        return {
+          ok: true,
+          determinant,
+          steps,
+          inverse: augmented.map((row) => row.slice(n)),
+        };
+      }
+
+      function renderResult(data) {
+        result.innerHTML = "";
+        stepsList.innerHTML = "";
+        stepsBox.hidden = !data.steps.length;
+
+        data.steps.forEach((step) => {
+          const item = document.createElement("li");
+          item.textContent = step;
+          stepsList.appendChild(item);
+        });
+
+        meta.hidden = false;
+        meta.innerHTML = `<div>行列式 det(A): ${formatNumber(data.determinant)}</div>`;
+
+        if (!data.ok) {
+          latestInverse = null;
+          message.textContent = data.reason;
+          message.className = "message error";
+          statusPill.textContent = "逆行列なし";
+          return;
+        }
+
+        latestInverse = data.inverse;
+        message.textContent = "逆行列 A^-1 を計算しました。";
+        message.className = "message";
+        statusPill.textContent = "計算完了";
+
+        const table = document.createElement("table");
+        table.className = "result-table";
+        data.inverse.forEach((row, rowIndex) => {
+          const tr = document.createElement("tr");
+          const th = document.createElement("th");
+          th.textContent = rowIndex + 1;
+          tr.appendChild(th);
+          row.forEach((value) => {
+            const td = document.createElement("td");
+            td.textContent = formatNumber(value);
+            tr.appendChild(td);
+          });
+          table.appendChild(tr);
+        });
+        result.appendChild(table);
+      }
+
+      function calculate() {
+        try {
+          const matrix = readMatrix();
+          renderResult(inverse(matrix));
+        } catch (error) {
+          latestInverse = null;
+          meta.hidden = true;
+          result.innerHTML = "";
+          stepsBox.hidden = true;
+          message.textContent = error.message;
+          message.className = "message error";
+          statusPill.textContent = "入力エラー";
+        }
+      }
+
+      function parseCsv(text) {
+        const rows = text
+          .trim()
+          .split(/\r?\n/)
+          .map((line) => line.split(/[,\s]+/).filter(Boolean).map(parseNumber));
+        const size = rows.length;
+        if (size < 2 || size > 6 || rows.some((row) => row.length !== size)) {
+          throw new Error("CSVは 2x2 から 6x6 の正方行列にしてください。");
+        }
+        return rows;
+      }
+
+      sizeSelect.addEventListener("change", () => buildGrid(Number(sizeSelect.value)));
+      document.querySelector("#calculateBtn").addEventListener("click", calculate);
+      document.querySelector("#identityBtn").addEventListener("click", () => {
+        const size = Number(sizeSelect.value);
+        fillMatrix(Array.from({ length: size }, (_, row) => Array.from({ length: size }, (_, col) => (row === col ? 1 : 0))));
+        calculate();
+      });
+      document.querySelector("#exampleBtn").addEventListener("click", () => {
+        fillMatrix(examples[Number(sizeSelect.value)]);
+        calculate();
+      });
+      document.querySelector("#clearBtn").addEventListener("click", () => {
+        buildGrid(Number(sizeSelect.value));
+        latestInverse = null;
+        meta.hidden = true;
+        result.innerHTML = "";
+        stepsBox.hidden = true;
+        message.textContent = "左の行列に値を入れて「計算」を押してください。";
+        message.className = "message";
+        statusPill.textContent = "準備完了";
+      });
+      document.querySelector("#pasteBtn").addEventListener("click", () => {
+        csvInput.hidden = !csvInput.hidden;
+        if (!csvInput.hidden) csvInput.focus();
+      });
+      csvInput.addEventListener("input", () => {
+        try {
+          const matrix = parseCsv(csvInput.value);
+          fillMatrix(matrix);
+          calculate();
+        } catch {
+          statusPill.textContent = "CSV待機中";
+        }
+      });
+      copyBtn.addEventListener("click", async () => {
+        if (!latestInverse) {
+          message.textContent = "コピーできる逆行列がまだありません。";
+          message.className = "message error";
+          return;
+        }
+        const text = latestInverse.map((row) => row.map(formatNumber).join(",")).join("\n");
+        await navigator.clipboard.writeText(text);
+        statusPill.textContent = "コピー完了";
+      });
+
+      buildGrid(Number(sizeSelect.value));
+      fillMatrix(examples[3]);
+      calculate();
+    </script>
+  </body>
+</html>
