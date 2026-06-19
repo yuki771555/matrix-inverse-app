@@ -189,6 +189,37 @@
         padding: 0 18px 18px;
       }
 
+      .keypad {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+        max-width: 360px;
+        padding: 0 18px 18px;
+      }
+
+      .keypad button {
+        min-height: 52px;
+        border: 1px solid var(--line);
+        background: #fff;
+        color: var(--ink);
+        font-size: 1.15rem;
+        font-weight: 800;
+      }
+
+      .keypad button:hover {
+        background: #f5f3ee;
+      }
+
+      .keypad button[data-action="calc"] {
+        border: 0;
+        background: var(--accent);
+        color: #fff;
+      }
+
+      .keypad button[data-action="calc"]:hover {
+        background: var(--accent-strong);
+      }
+
       .output {
         padding: 18px;
       }
@@ -404,6 +435,24 @@
             <button id="pasteBtn" type="button" class="secondary">CSVを貼り付け</button>
             <button id="copyBtn" type="button" class="secondary">結果をコピー</button>
           </div>
+          <div class="keypad" id="keypad" role="group" aria-label="テンキー入力">
+            <button type="button" data-key="7">7</button>
+            <button type="button" data-key="8">8</button>
+            <button type="button" data-key="9">9</button>
+            <button type="button" data-action="backspace" aria-label="一文字削除">⌫</button>
+            <button type="button" data-key="4">4</button>
+            <button type="button" data-key="5">5</button>
+            <button type="button" data-key="6">6</button>
+            <button type="button" data-key="/" aria-label="分数のスラッシュ">/</button>
+            <button type="button" data-key="1">1</button>
+            <button type="button" data-key="2">2</button>
+            <button type="button" data-key="3">3</button>
+            <button type="button" data-action="sign" aria-label="符号反転">±</button>
+            <button type="button" data-key=".">.</button>
+            <button type="button" data-key="0">0</button>
+            <button type="button" data-action="clear" aria-label="このセルをクリア">C</button>
+            <button type="button" data-action="calc">計算</button>
+          </div>
         </div>
 
         <aside class="output" aria-live="polite">
@@ -450,10 +499,12 @@
       const stepsList = document.querySelector("#steps");
       const csvInput = document.querySelector("#csvInput");
       const copyBtn = document.querySelector("#copyBtn");
+      const keypad = document.querySelector("#keypad");
       const displayModeInputs = document.querySelectorAll('input[name="displayMode"]');
 
       let latestInverse = null;
       let latestResult = null;
+      let activeCell = null;
 
       const examples = {
         2: [
@@ -515,15 +566,16 @@
       function buildGrid(size) {
         grid.innerHTML = "";
         grid.style.gridTemplateColumns = `repeat(${size}, minmax(76px, 1fr))`;
+        activeCell = null;
         latestInverse = null;
         latestResult = null;
         for (let row = 0; row < size; row += 1) {
           for (let col = 0; col < size; col += 1) {
             const input = document.createElement("input");
             input.className = "cell";
-            // 通常キーボードを出してマイナス(−)・分数(/)・小数点をネイティブに入力可能にする。
-            // （inputmode=decimal/numeric だとスマホで −・/ が出ないため）
-            input.inputMode = "text";
+            // 入力は画面上のテンキー（#keypad）で行うため、OS の仮想キーボードは出さない。
+            // （物理キーボードでの入力や矢印キー移動は引き続き有効）
+            input.inputMode = "none";
             input.autocomplete = "off";
             input.setAttribute("autocapitalize", "off");
             input.setAttribute("autocorrect", "off");
@@ -682,6 +734,71 @@
           return null;
         }
       }
+
+      // ---- 画面上テンキー ----
+      function getActiveCell() {
+        if (activeCell && activeCell.isConnected) return activeCell;
+        activeCell = grid.querySelector("input");
+        return activeCell;
+      }
+
+      function keypadInsert(cell, text) {
+        const start = cell.selectionStart ?? cell.value.length;
+        const end = cell.selectionEnd ?? cell.value.length;
+        cell.value = cell.value.slice(0, start) + text + cell.value.slice(end);
+        const pos = start + text.length;
+        cell.setSelectionRange(pos, pos);
+      }
+
+      function keypadBackspace(cell) {
+        const start = cell.selectionStart ?? cell.value.length;
+        const end = cell.selectionEnd ?? cell.value.length;
+        if (start !== end) {
+          cell.value = cell.value.slice(0, start) + cell.value.slice(end);
+          cell.setSelectionRange(start, start);
+        } else if (start > 0) {
+          cell.value = cell.value.slice(0, start - 1) + cell.value.slice(start);
+          cell.setSelectionRange(start - 1, start - 1);
+        }
+      }
+
+      function keypadToggleSign(cell) {
+        cell.value = /^[-−－]/.test(cell.value)
+          ? cell.value.replace(/^[-−－]/, "")
+          : "-" + cell.value;
+        cell.setSelectionRange(cell.value.length, cell.value.length);
+      }
+
+      // ボタン押下でセルのフォーカス（キャレット）を奪わないようにする。
+      keypad.addEventListener("pointerdown", (event) => {
+        if (event.target.closest("button")) event.preventDefault();
+      });
+      keypad.addEventListener("click", (event) => {
+        const btn = event.target.closest("button");
+        if (!btn) return;
+        if (btn.dataset.action === "calc") {
+          calculate();
+          return;
+        }
+        const cell = getActiveCell();
+        if (!cell) return;
+        const wasFocused = document.activeElement === cell;
+        cell.focus();
+        if (!wasFocused) cell.setSelectionRange(cell.value.length, cell.value.length);
+        const action = btn.dataset.action;
+        if (action === "backspace") keypadBackspace(cell);
+        else if (action === "sign") keypadToggleSign(cell);
+        else if (action === "clear") {
+          cell.value = "";
+          cell.setSelectionRange(0, 0);
+        } else {
+          keypadInsert(cell, btn.dataset.key);
+        }
+        scheduleSave();
+      });
+      grid.addEventListener("focusin", (event) => {
+        if (event.target.matches("#matrixGrid input")) activeCell = event.target;
+      });
 
       sizeSelect.addEventListener("change", () => {
         buildGrid(Number(sizeSelect.value));
