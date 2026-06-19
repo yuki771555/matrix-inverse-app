@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <title>matrix.js テストランナー</title>
+  </head>
+  <body>
+    <h1>matrix.js テストランナー</h1>
+    <pre id="out">実行中...</pre>
+    <script src="../matrix.js"></script>
+    <script src="matrix.test.js"></script>
+    <script>
+      const r = globalThis.__TEST__ || { summary: "未実行" };
+      document.getElementById("out").textContent = r.summary;
+      document.title = r.failed === 0 ? "PASS: " + r.summary : "FAIL: " + r.summary;
+    </script>
+  </body>
+</html>

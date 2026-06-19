@@ -427,7 +427,7 @@
               </label>
             </fieldset>
           </div>
-          <p id="message" class="message">左の行列に値を入れて「計算」を押してください。</p>
+          <p id="message" class="message" role="alert">左の行列に値を入れて「計算」を押してください。</p>
           <div id="meta" class="meta" hidden></div>
           <div id="result"></div>
           <details class="steps" id="stepsBox" hidden>
@@ -442,7 +442,10 @@
       </section>
     </main>
 
+    <script src="matrix.js"></script>
     <script>
+      const { Rational, parseRational, invert, formatRational } = MatrixMath;
+
       const sizeSelect = document.querySelector("#sizeSelect");
       const grid = document.querySelector("#matrixGrid");
       const message = document.querySelector("#message");
@@ -493,88 +496,28 @@
         ],
       };
 
-      function parseNumber(value) {
-        const trimmed = value.trim().replace(/[−－]/g, "-");
-        if (!trimmed) return 0;
-        if (trimmed.includes("/")) {
-          const parts = trimmed.split("/");
-          if (parts.length !== 2) throw new Error(`「${value}」は分数として読み取れません。`);
-          const numerator = Number(parts[0]);
-          const denominator = Number(parts[1]);
-          if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator === 0) {
-            throw new Error(`「${value}」は分数として読み取れません。`);
-          }
-          return numerator / denominator;
+      // 数値の解析・整形は matrix.js（厳密有理数）に委譲。ここは表示形式（ラジオ）を
+      // 読み取って formatRational に渡す薄いアダプタだけを持つ。
+      function currentDisplayMode() {
+        return document.querySelector('input[name="displayMode"]:checked').value;
+      }
+
+      function formatValue(rational) {
+        return formatRational(rational, currentDisplayMode());
+      }
+
+      // 構造化された計算ステップ（matrix.js の invert が返す）を日本語文字列にする。
+      function formatStep(step) {
+        switch (step.type) {
+          case "swap":
+            return `R${step.a + 1} と R${step.b + 1} を交換`;
+          case "scale":
+            return `R${step.row + 1} を ${formatValue(step.by)} で割ってピボットを 1 にする`;
+          case "eliminate":
+            return `R${step.row + 1} から ${formatValue(step.factor)} x R${step.pivotRow + 1} を引く`;
+          default:
+            return "";
         }
-        const parsed = Number(trimmed);
-        if (!Number.isFinite(parsed)) throw new Error(`「${value}」は数値として読み取れません。`);
-        return parsed;
-      }
-
-      function formatNumber(value) {
-        if (Math.abs(value) < 1e-10) return "0";
-        const rounded = Number(value.toFixed(10));
-        return rounded.toLocaleString("ja-JP", {
-          maximumFractionDigits: 10,
-          useGrouping: false,
-        });
-      }
-
-      function approximateFraction(value, maxDenominator = 100000) {
-        if (!Number.isFinite(value)) return null;
-        if (Math.abs(value) < 1e-10) return { numerator: 0, denominator: 1 };
-
-        const sign = value < 0 ? -1 : 1;
-        const target = Math.abs(value);
-        const rounded = Math.round(target);
-        if (Math.abs(target - rounded) < 1e-10) {
-          return { numerator: sign * rounded, denominator: 1 };
-        }
-
-        let lowerN = 0;
-        let lowerD = 1;
-        let upperN = 1;
-        let upperD = 0;
-
-        while (true) {
-          const middleN = lowerN + upperN;
-          const middleD = lowerD + upperD;
-          if (middleD > maxDenominator) break;
-
-          const middle = middleN / middleD;
-          if (Math.abs(target - middle) < 1e-10) {
-            return { numerator: sign * middleN, denominator: middleD };
-          }
-          if (middle < target) {
-            lowerN = middleN;
-            lowerD = middleD;
-          } else {
-            upperN = middleN;
-            upperD = middleD;
-          }
-        }
-
-        const lower = lowerN / lowerD;
-        const upper = upperD === 0 ? Number.POSITIVE_INFINITY : upperN / upperD;
-        const best =
-          Math.abs(target - lower) <= Math.abs(target - upper)
-            ? { numerator: lowerN, denominator: lowerD }
-            : { numerator: upperN, denominator: upperD };
-
-        if (Math.abs(target - best.numerator / best.denominator) > 1e-8) return null;
-        return { numerator: sign * best.numerator, denominator: best.denominator };
-      }
-
-      function formatFraction(value) {
-        const fraction = approximateFraction(value);
-        if (!fraction) return formatNumber(value);
-        if (fraction.denominator === 1) return String(fraction.numerator);
-        return `${fraction.numerator}/${fraction.denominator}`;
-      }
-
-      function formatValue(value) {
-        const displayMode = document.querySelector('input[name="displayMode"]:checked').value;
-        return displayMode === "fraction" ? formatFraction(value) : formatNumber(value);
       }
 
       function buildGrid(size) {
@@ -589,7 +532,7 @@
             input.className = "cell";
             input.inputMode = "decimal";
             input.autocomplete = "off";
-            input.ariaLabel = `${row + 1}行${col + 1}列`;
+            input.setAttribute("aria-label", `${row + 1}行${col + 1}列`);
             input.dataset.row = row;
             input.dataset.col = col;
             input.addEventListener("focus", () => {
@@ -632,13 +575,16 @@
         input.setSelectionRange(input.value.length, input.value.length);
         activeMatrixInput = input;
         statusPill.textContent = "マイナス入力";
+        scheduleSave();
       }
 
       function readMatrix() {
         const size = Number(sizeSelect.value);
-        const matrix = Array.from({ length: size }, () => Array(size).fill(0));
+        const matrix = Array.from({ length: size }, () =>
+          Array.from({ length: size }, () => Rational.fromInt(0)),
+        );
         [...grid.querySelectorAll("input")].forEach((input) => {
-          matrix[Number(input.dataset.row)][Number(input.dataset.col)] = parseNumber(input.value);
+          matrix[Number(input.dataset.row)][Number(input.dataset.col)] = parseRational(input.value);
         });
         return matrix;
       }
@@ -653,67 +599,6 @@
         });
       }
 
-      function inverse(matrix) {
-        const n = matrix.length;
-        const augmented = matrix.map((row, rowIndex) => [
-          ...row.map(Number),
-          ...Array.from({ length: n }, (_, colIndex) => (rowIndex === colIndex ? 1 : 0)),
-        ]);
-        const steps = [];
-        let determinant = 1;
-        let swaps = 0;
-
-        for (let col = 0; col < n; col += 1) {
-          let pivotRow = col;
-          for (let row = col + 1; row < n; row += 1) {
-            if (Math.abs(augmented[row][col]) > Math.abs(augmented[pivotRow][col])) {
-              pivotRow = row;
-            }
-          }
-
-          const pivot = augmented[pivotRow][col];
-          if (Math.abs(pivot) < 1e-12) {
-            return {
-              ok: false,
-              determinant: 0,
-              steps,
-              reason: `${col + 1}列目で有効なピボットが見つからないため、この行列は逆行列を持ちません。`,
-            };
-          }
-
-          if (pivotRow !== col) {
-            [augmented[col], augmented[pivotRow]] = [augmented[pivotRow], augmented[col]];
-            swaps += 1;
-            steps.push(`R${col + 1} と R${pivotRow + 1} を交換`);
-          }
-
-          const pivotValue = augmented[col][col];
-          determinant *= pivotValue;
-          for (let j = 0; j < 2 * n; j += 1) {
-            augmented[col][j] /= pivotValue;
-          }
-          steps.push(`R${col + 1} を ${formatValue(pivotValue)} で割ってピボットを 1 にする`);
-
-          for (let row = 0; row < n; row += 1) {
-            if (row === col) continue;
-            const factor = augmented[row][col];
-            if (Math.abs(factor) < 1e-12) continue;
-            for (let j = 0; j < 2 * n; j += 1) {
-              augmented[row][j] -= factor * augmented[col][j];
-            }
-            steps.push(`R${row + 1} から ${formatValue(factor)} x R${col + 1} を引く`);
-          }
-        }
-
-        if (swaps % 2 === 1) determinant *= -1;
-        return {
-          ok: true,
-          determinant,
-          steps,
-          inverse: augmented.map((row) => row.slice(n)),
-        };
-      }
-
       function renderResult(data) {
         result.innerHTML = "";
         stepsList.innerHTML = "";
@@ -722,7 +607,7 @@
 
         data.steps.forEach((step) => {
           const item = document.createElement("li");
-          item.textContent = step;
+          item.textContent = formatStep(step);
           stepsList.appendChild(item);
         });
 
@@ -762,7 +647,8 @@
       function calculate() {
         try {
           const matrix = readMatrix();
-          renderResult(inverse(matrix));
+          renderResult(invert(matrix));
+          saveState();
         } catch (error) {
           latestInverse = null;
           latestResult = null;
@@ -776,10 +662,15 @@
       }
 
       function parseCsv(text) {
-        const rows = text
-          .trim()
+        // 空セル（連続カンマ）を 0 として保持する。カンマが無ければ空白/タブ区切りに対応。
+        // 値は文字列のまま返し、3/4 や小数は readMatrix の parseRational に解釈させる。
+        const lines = text
           .split(/\r?\n/)
-          .map((line) => line.split(/[,\s]+/).filter(Boolean).map(parseNumber));
+          .map((line) => line.trim())
+          .filter((line) => line !== "");
+        const rows = lines.map((line) =>
+          line.includes(",") ? line.split(",").map((cell) => cell.trim()) : line.split(/\s+/),
+        );
         const size = rows.length;
         if (size < 2 || size > 6 || rows.some((row) => row.length !== size)) {
           throw new Error("CSVは 2x2 から 6x6 の正方行列にしてください。");
@@ -787,7 +678,57 @@
         return rows;
       }
 
-      sizeSelect.addEventListener("change", () => buildGrid(Number(sizeSelect.value)));
+      const STORAGE_KEY = "matrix-inverse-app:v1";
+      let saveTimer = null;
+
+      function readGridValues() {
+        const size = Number(sizeSelect.value);
+        const values = Array.from({ length: size }, () => Array(size).fill(""));
+        grid.querySelectorAll("input").forEach((input) => {
+          values[Number(input.dataset.row)][Number(input.dataset.col)] = input.value;
+        });
+        return values;
+      }
+
+      function saveState() {
+        try {
+          localStorage.setItem(
+            STORAGE_KEY,
+            JSON.stringify({
+              size: Number(sizeSelect.value),
+              values: readGridValues(),
+              mode: currentDisplayMode(),
+            }),
+          );
+        } catch {
+          /* localStorage 不可（privateモード等）は無視 */
+        }
+      }
+
+      function scheduleSave() {
+        if (saveTimer) clearTimeout(saveTimer);
+        saveTimer = setTimeout(saveState, 300);
+      }
+
+      function loadState() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return null;
+          const state = JSON.parse(raw);
+          const size = Number(state.size);
+          if (!(size >= 2 && size <= 6)) return null;
+          if (!Array.isArray(state.values) || state.values.length !== size) return null;
+          if (state.values.some((row) => !Array.isArray(row) || row.length !== size)) return null;
+          return state;
+        } catch {
+          return null;
+        }
+      }
+
+      sizeSelect.addEventListener("change", () => {
+        buildGrid(Number(sizeSelect.value));
+        saveState();
+      });
       document.querySelector("#calculateBtn").addEventListener("click", calculate);
       document.querySelector("#identityBtn").addEventListener("click", () => {
         const size = Number(sizeSelect.value);
@@ -808,6 +749,7 @@
         message.textContent = "左の行列に値を入れて「計算」を押してください。";
         message.className = "message";
         statusPill.textContent = "準備完了";
+        saveState();
       });
       document.querySelector("#pasteBtn").addEventListener("click", () => {
         csvInput.hidden = !csvInput.hidden;
@@ -818,6 +760,36 @@
           activeMatrixInput = event.target;
         }
       });
+      grid.addEventListener("keydown", (event) => {
+        const target = event.target;
+        if (!target.matches || !target.matches("#matrixGrid input")) return;
+        if (event.key === "Enter") {
+          event.preventDefault();
+          calculate();
+          return;
+        }
+        const size = Number(sizeSelect.value);
+        const row = Number(target.dataset.row);
+        const col = Number(target.dataset.col);
+        const atStart = target.selectionStart === 0 && target.selectionEnd === 0;
+        const atEnd =
+          target.selectionStart === target.value.length &&
+          target.selectionEnd === target.value.length;
+        let next = null;
+        if (event.key === "ArrowUp") next = [row - 1, col];
+        else if (event.key === "ArrowDown") next = [row + 1, col];
+        else if (event.key === "ArrowLeft" && atStart) next = [row, col - 1];
+        else if (event.key === "ArrowRight" && atEnd) next = [row, col + 1];
+        if (!next) return;
+        const [r, c] = next;
+        if (r < 0 || r >= size || c < 0 || c >= size) return;
+        const cell = grid.querySelector(`input[data-row="${r}"][data-col="${c}"]`);
+        if (!cell) return;
+        event.preventDefault();
+        cell.focus();
+        cell.setSelectionRange(cell.value.length, cell.value.length);
+      });
+      grid.addEventListener("input", scheduleSave);
       minusBtn.addEventListener("pointerdown", (event) => {
         event.preventDefault();
       });
@@ -835,21 +807,55 @@
         if (!latestInverse) {
           message.textContent = "コピーできる逆行列がまだありません。";
           message.className = "message error";
+          statusPill.textContent = "コピー不可";
           return;
         }
         const text = latestInverse.map((row) => row.map(formatValue).join(",")).join("\n");
-        await navigator.clipboard.writeText(text);
-        statusPill.textContent = "コピー完了";
+        try {
+          if (!navigator.clipboard || !navigator.clipboard.writeText) {
+            throw new Error("clipboard API が使えません");
+          }
+          await navigator.clipboard.writeText(text);
+          message.textContent = "逆行列をクリップボードにコピーしました。";
+          message.className = "message";
+          statusPill.textContent = "コピー完了";
+        } catch {
+          // 非セキュアコンテキスト（file:// 等）や権限拒否時は手動コピーへフォールバック。
+          csvInput.hidden = false;
+          csvInput.value = text;
+          csvInput.focus();
+          csvInput.select();
+          message.textContent = "自動コピーできませんでした。下のテキストを選択してコピーしてください。";
+          message.className = "message";
+          statusPill.textContent = "手動コピー";
+        }
       });
       displayModeInputs.forEach((input) => {
         input.addEventListener("change", () => {
           if (latestResult) calculate();
+          else saveState();
         });
       });
 
-      buildGrid(Number(sizeSelect.value));
-      fillMatrix(examples[3]);
-      calculate();
+      const savedState = loadState();
+      if (savedState) {
+        // 前回の入力（サイズ・値・表示形式）を復元する。
+        sizeSelect.value = String(savedState.size);
+        buildGrid(savedState.size);
+        grid.querySelectorAll("input").forEach((input) => {
+          const v = savedState.values[Number(input.dataset.row)][Number(input.dataset.col)];
+          input.value = typeof v === "string" ? v : "";
+        });
+        const modeInput = document.querySelector(
+          `input[name="displayMode"][value="${savedState.mode}"]`,
+        );
+        if (modeInput) modeInput.checked = true;
+        calculate();
+      } else {
+        buildGrid(Number(sizeSelect.value));
+        fillMatrix(examples[3]);
+        calculate();
+      }
     </script>
   </body>
 </html>
