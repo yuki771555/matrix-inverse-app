@@ -193,9 +193,77 @@
         padding: 18px;
       }
 
-      .output h2 {
-        margin: 0 0 12px;
+      .result-header {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 12px;
+      }
+
+      .result-header h2 {
+        margin: 0;
         font-size: 1.2rem;
+      }
+
+      .mode-toggle {
+        display: inline-flex;
+        gap: 8px;
+        align-items: center;
+        min-width: 250px;
+        margin: 0;
+        padding: 4px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fbfaf8;
+      }
+
+      .mode-toggle legend {
+        padding: 0 4px;
+        color: var(--muted);
+        font-size: 0.82rem;
+        font-weight: 800;
+      }
+
+      .mode-toggle label {
+        position: relative;
+        flex: 1;
+        color: var(--ink);
+      }
+
+      .mode-toggle input {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        opacity: 0;
+        cursor: pointer;
+      }
+
+      .mode-toggle span {
+        display: grid;
+        place-items: center;
+        min-height: 36px;
+        border-radius: 6px;
+        color: var(--muted);
+        font-weight: 900;
+        transition:
+          background 0.16s ease,
+          color 0.16s ease,
+          box-shadow 0.16s ease;
+      }
+
+      .mode-toggle input:checked + span {
+        background: var(--accent);
+        color: #fff;
+        box-shadow: 0 8px 20px rgba(15, 118, 110, 0.22);
+      }
+
+      .mode-toggle input:focus-visible + span {
+        outline: 3px solid rgba(15, 118, 110, 0.26);
+        outline-offset: 2px;
       }
 
       .message {
@@ -323,11 +391,6 @@
               <option value="5">5 x 5</option>
               <option value="6">6 x 6</option>
             </select>
-            <label for="displayMode">表示</label>
-            <select id="displayMode" aria-label="結果の表示形式">
-              <option value="fraction" selected>分数</option>
-              <option value="decimal">小数</option>
-            </select>
             <button id="calculateBtn" type="button">計算</button>
             <button id="identityBtn" type="button" class="secondary">単位行列</button>
             <button id="exampleBtn" type="button" class="secondary">例を入力</button>
@@ -344,7 +407,20 @@
         </div>
 
         <aside class="output" aria-live="polite">
-          <h2>計算結果</h2>
+          <div class="result-header">
+            <h2>計算結果</h2>
+            <fieldset class="mode-toggle" aria-label="結果の表示形式">
+              <legend>結果表示</legend>
+              <label>
+                <input type="radio" name="displayMode" value="fraction" checked />
+                <span>分数</span>
+              </label>
+              <label>
+                <input type="radio" name="displayMode" value="decimal" />
+                <span>小数</span>
+              </label>
+            </fieldset>
+          </div>
           <p id="message" class="message">左の行列に値を入れて「計算」を押してください。</p>
           <div id="meta" class="meta" hidden></div>
           <div id="result"></div>
@@ -371,7 +447,7 @@
       const stepsList = document.querySelector("#steps");
       const csvInput = document.querySelector("#csvInput");
       const copyBtn = document.querySelector("#copyBtn");
-      const displayMode = document.querySelector("#displayMode");
+      const displayModeInputs = document.querySelectorAll('input[name="displayMode"]');
 
       let latestInverse = null;
       let latestResult = null;
@@ -489,7 +565,8 @@
       }
 
       function formatValue(value) {
-        return displayMode.value === "fraction" ? formatFraction(value) : formatNumber(value);
+        const displayMode = document.querySelector('input[name="displayMode"]:checked').value;
+        return displayMode === "fraction" ? formatFraction(value) : formatNumber(value);
       }
 
       function buildGrid(size) {
@@ -709,8 +786,10 @@
         await navigator.clipboard.writeText(text);
         statusPill.textContent = "コピー完了";
       });
-      displayMode.addEventListener("change", () => {
-        if (latestResult) calculate();
+      displayModeInputs.forEach((input) => {
+        input.addEventListener("change", () => {
+          if (latestResult) calculate();
+        });
       });
 
       buildGrid(Number(sizeSelect.value));
