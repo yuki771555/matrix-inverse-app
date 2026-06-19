@@ -26,10 +26,12 @@
       body {
         margin: 0;
         min-height: 100vh;
-        background:
-          linear-gradient(135deg, rgba(15, 118, 110, 0.12), transparent 36%),
-          linear-gradient(315deg, rgba(192, 86, 33, 0.1), transparent 34%),
-          var(--bg);
+        position: relative;
+        overflow-x: hidden;
+        isolation: isolate;
+        background: linear-gradient(120deg, #f8fff2 0%, #dcfff7 22%, #fff0fb 48%, #fff3d1 72%, #e9f0ff 100%);
+        background-size: 420% 420%;
+        animation: pageGradientPulse 12s ease-in-out infinite;
         color: var(--ink);
         font-family:
           "Segoe UI",
@@ -38,6 +40,94 @@
           BlinkMacSystemFont,
           "Noto Sans JP",
           sans-serif;
+      }
+
+      body::before,
+      body::after {
+        content: "";
+        position: fixed;
+        inset: -30%;
+        z-index: -2;
+        pointer-events: none;
+      }
+
+      body::before {
+        background:
+          radial-gradient(circle at 12% 18%, rgba(0, 221, 255, 0.62), transparent 24%),
+          radial-gradient(circle at 88% 16%, rgba(255, 59, 209, 0.5), transparent 26%),
+          radial-gradient(circle at 58% 76%, rgba(255, 199, 0, 0.52), transparent 28%),
+          radial-gradient(circle at 24% 86%, rgba(57, 255, 136, 0.36), transparent 24%),
+          linear-gradient(135deg, rgba(15, 118, 110, 0.2), rgba(255, 84, 112, 0.2), rgba(78, 124, 255, 0.22));
+        filter: saturate(155%) contrast(108%) hue-rotate(0deg);
+        animation:
+          gradientDrift 9s ease-in-out infinite alternate,
+          colorSpin 13s linear infinite;
+      }
+
+      body::after {
+        inset: -24%;
+        z-index: -1;
+        background:
+          conic-gradient(from 0deg at 50% 50%, rgba(0, 221, 255, 0.24), rgba(255, 59, 209, 0.26), rgba(255, 199, 0, 0.24), rgba(57, 255, 136, 0.2), rgba(0, 221, 255, 0.24)),
+          radial-gradient(circle at 82% 78%, rgba(255, 84, 112, 0.32), transparent 26%),
+          radial-gradient(circle at 10% 84%, rgba(78, 124, 255, 0.28), transparent 24%);
+        mix-blend-mode: multiply;
+        opacity: 0.9;
+        animation:
+          gradientFloat 12s ease-in-out infinite alternate,
+          gradientSpin 20s linear infinite;
+      }
+
+      @keyframes pageGradientPulse {
+        0% {
+          background-position: 0% 50%;
+        }
+
+        50% {
+          background-position: 100% 50%;
+        }
+
+        100% {
+          background-position: 0% 50%;
+        }
+      }
+
+      @keyframes gradientDrift {
+        0% {
+          transform: translate3d(-6%, -4%, 0) scale(1) rotate(-4deg);
+        }
+
+        50% {
+          transform: translate3d(5%, 3%, 0) scale(1.12) rotate(6deg);
+        }
+
+        100% {
+          transform: translate3d(-2%, 7%, 0) scale(1.2) rotate(-7deg);
+        }
+      }
+
+      @keyframes gradientFloat {
+        0% {
+          transform: translate3d(4%, 7%, 0) scale(1) rotate(0deg);
+          opacity: 0.62;
+        }
+
+        100% {
+          transform: translate3d(-5%, -4%, 0) scale(1.18) rotate(18deg);
+          opacity: 0.95;
+        }
+      }
+
+      @keyframes colorSpin {
+        100% {
+          filter: saturate(170%) contrast(112%) hue-rotate(360deg);
+        }
+      }
+
+      @keyframes gradientSpin {
+        100% {
+          transform: rotate(360deg) scale(1.12);
+        }
       }
 
       main {
@@ -138,7 +228,11 @@
         border: 0;
         border-radius: 7px;
         padding: 0 14px;
+        position: relative;
+        overflow: hidden;
+        isolation: isolate;
         background: var(--accent);
+        --burst-color: rgba(255, 255, 255, 0.56);
         color: #fff;
         font-weight: 800;
         cursor: pointer;
@@ -155,6 +249,7 @@
       button.secondary {
         border: 1px solid var(--line);
         background: #fff;
+        --burst-color: rgba(15, 118, 110, 0.24);
         color: var(--ink);
       }
 
@@ -201,6 +296,7 @@
         min-height: 52px;
         border: 1px solid var(--line);
         background: #fff;
+        --burst-color: rgba(15, 118, 110, 0.22);
         color: var(--ink);
         font-size: 1.15rem;
         font-weight: 800;
@@ -213,6 +309,7 @@
       .keypad button[data-action="calc"] {
         border: 0;
         background: var(--accent);
+        --burst-color: rgba(255, 255, 255, 0.56);
         color: #fff;
       }
 
@@ -378,6 +475,48 @@
         line-height: 1.55;
       }
 
+      .button-burst {
+        position: absolute;
+        left: var(--burst-x);
+        top: var(--burst-y);
+        width: var(--burst-size);
+        aspect-ratio: 1;
+        border-radius: 999px;
+        background: radial-gradient(circle, var(--burst-color) 0%, var(--burst-color) 28%, transparent 70%);
+        pointer-events: none;
+        transform: translate(-50%, -50%) scale(0);
+        opacity: 0.88;
+        animation: buttonBurst 560ms ease-out forwards;
+      }
+
+      @keyframes buttonBurst {
+        0% {
+          transform: translate(-50%, -50%) scale(0);
+          opacity: 0.9;
+        }
+
+        70% {
+          opacity: 0.38;
+        }
+
+        100% {
+          transform: translate(-50%, -50%) scale(1);
+          opacity: 0;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        body,
+        body::before,
+        body::after {
+          animation: none;
+        }
+
+        button {
+          transition: none;
+        }
+      }
+
       @media (max-width: 860px) {
         main {
           width: min(100% - 20px, 680px);
@@ -505,6 +644,42 @@
       let latestInverse = null;
       let latestResult = null;
       let activeCell = null;
+      const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+      function playButtonBurst(button, event) {
+        if (reducedMotion.matches) return;
+        const rect = button.getBoundingClientRect();
+        const x = event ? event.clientX - rect.left : rect.width / 2;
+        const y = event ? event.clientY - rect.top : rect.height / 2;
+        const size = Math.max(rect.width, rect.height) * 2.35;
+        const burst = document.createElement("span");
+        burst.className = "button-burst";
+        burst.style.setProperty("--burst-x", `${x}px`);
+        burst.style.setProperty("--burst-y", `${y}px`);
+        burst.style.setProperty("--burst-size", `${size}px`);
+        button.appendChild(burst);
+        burst.addEventListener("animationend", () => burst.remove(), { once: true });
+        window.setTimeout(() => burst.remove(), 700);
+      }
+
+      document.addEventListener(
+        "pointerdown",
+        (event) => {
+          if (!(event.target instanceof Element)) return;
+          const button = event.target.closest("button");
+          if (!button || button.disabled) return;
+          playButtonBurst(button, event);
+        },
+        { capture: true },
+      );
+
+      document.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        if (!(event.target instanceof Element)) return;
+        const button = event.target.closest("button");
+        if (!button || button.disabled) return;
+        playButtonBurst(button);
+      });
 
       const examples = {
         2: [
