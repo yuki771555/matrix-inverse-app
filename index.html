@@ -189,11 +189,6 @@
         padding: 0 18px 18px;
       }
 
-      .minus-button {
-        min-width: 76px;
-        font-size: 1.08rem;
-      }
-
       .output {
         padding: 18px;
       }
@@ -406,7 +401,6 @@
             <p class="hint">入力例: <code>1.5</code>, <code>-2</code>, <code>3/4</code>。空欄は 0 として扱います。</p>
           </div>
           <div class="actions">
-            <button id="minusBtn" type="button" class="secondary minus-button" title="選択中のセルにマイナスを入力">−入力</button>
             <button id="pasteBtn" type="button" class="secondary">CSVを貼り付け</button>
             <button id="copyBtn" type="button" class="secondary">結果をコピー</button>
           </div>
@@ -456,10 +450,8 @@
       const stepsList = document.querySelector("#steps");
       const csvInput = document.querySelector("#csvInput");
       const copyBtn = document.querySelector("#copyBtn");
-      const minusBtn = document.querySelector("#minusBtn");
       const displayModeInputs = document.querySelectorAll('input[name="displayMode"]');
 
-      let activeMatrixInput = null;
       let latestInverse = null;
       let latestResult = null;
 
@@ -523,59 +515,25 @@
       function buildGrid(size) {
         grid.innerHTML = "";
         grid.style.gridTemplateColumns = `repeat(${size}, minmax(76px, 1fr))`;
-        activeMatrixInput = null;
         latestInverse = null;
         latestResult = null;
         for (let row = 0; row < size; row += 1) {
           for (let col = 0; col < size; col += 1) {
             const input = document.createElement("input");
             input.className = "cell";
-            input.inputMode = "decimal";
+            // 通常キーボードを出してマイナス(−)・分数(/)・小数点をネイティブに入力可能にする。
+            // （inputmode=decimal/numeric だとスマホで −・/ が出ないため）
+            input.inputMode = "text";
             input.autocomplete = "off";
+            input.setAttribute("autocapitalize", "off");
+            input.setAttribute("autocorrect", "off");
+            input.spellcheck = false;
             input.setAttribute("aria-label", `${row + 1}行${col + 1}列`);
             input.dataset.row = row;
             input.dataset.col = col;
-            input.addEventListener("focus", () => {
-              activeMatrixInput = input;
-            });
             grid.appendChild(input);
           }
         }
-      }
-
-      function toggleMinusForActiveCell() {
-        const input =
-          document.activeElement?.matches?.("#matrixGrid input")
-            ? document.activeElement
-            : activeMatrixInput?.isConnected
-              ? activeMatrixInput
-              : null;
-
-        if (!input) {
-          message.textContent = "マイナスを入れたいセルを先に選んでください。";
-          message.className = "message error";
-          statusPill.textContent = "セル未選択";
-          return;
-        }
-
-        const value = input.value;
-        const leadingSpaces = value.length - value.trimStart().length;
-        const signIndex = leadingSpaces;
-        const currentSign = value[signIndex];
-
-        if (value.trim() === "") {
-          input.value = "-";
-        } else if (currentSign === "-" || currentSign === "−" || currentSign === "－") {
-          input.value = value.slice(0, signIndex) + value.slice(signIndex + 1);
-        } else {
-          input.value = value.slice(0, signIndex) + "-" + value.slice(signIndex);
-        }
-
-        input.focus();
-        input.setSelectionRange(input.value.length, input.value.length);
-        activeMatrixInput = input;
-        statusPill.textContent = "マイナス入力";
-        scheduleSave();
       }
 
       function readMatrix() {
@@ -755,11 +713,6 @@
         csvInput.hidden = !csvInput.hidden;
         if (!csvInput.hidden) csvInput.focus();
       });
-      grid.addEventListener("focusin", (event) => {
-        if (event.target.matches("#matrixGrid input")) {
-          activeMatrixInput = event.target;
-        }
-      });
       grid.addEventListener("keydown", (event) => {
         const target = event.target;
         if (!target.matches || !target.matches("#matrixGrid input")) return;
@@ -790,10 +743,6 @@
         cell.setSelectionRange(cell.value.length, cell.value.length);
       });
       grid.addEventListener("input", scheduleSave);
-      minusBtn.addEventListener("pointerdown", (event) => {
-        event.preventDefault();
-      });
-      minusBtn.addEventListener("click", toggleMinusForActiveCell);
       csvInput.addEventListener("input", () => {
         try {
           const matrix = parseCsv(csvInput.value);
